@@ -1,7 +1,7 @@
 <template>
   <div class="game-container">
     <header>
-      <router-link to="/" class="back-link">← 返回</router-link>
+      <BackButton />
       <h1>⚫ 五子棋 ⚪</h1>
     </header>
 
@@ -49,9 +49,7 @@
       </div>
     </main>
 
-    <footer>
-      <p>{{ gameMode === 'pve' ? '人机对战模式' : '双人对战模式' }} | 策略益智游戏</p>
-    </footer>
+    <PageFooter :copyright="`${gameMode === 'pve' ? '人机对战模式' : '双人对战模式'} | 策略益智游戏`" />
 
     <!-- 游戏结果弹窗 -->
     <GameResultDialog
@@ -68,6 +66,8 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import GameResultDialog from '../components/GameResultDialog.vue'
+import BackButton from '../components/BackButton.vue'
+import PageFooter from '../components/PageFooter.vue'
 
 const canvasRef = ref(null)
 const boardSize = 15
@@ -506,6 +506,9 @@ onMounted(() => {
   max-width: 800px;
   margin: 0 auto;
   padding: 20px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 header {
@@ -515,23 +518,7 @@ header {
   margin-bottom: 30px;
 }
 
-.back-link {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  color: white;
-  text-decoration: none;
-  font-size: 1.1em;
-  transition: opacity 0.3s;
-  padding: 8px 12px;
-}
 
-.back-link:hover {
-  opacity: 0.8;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-}
 
 h1 {
   font-size: 2.5em;

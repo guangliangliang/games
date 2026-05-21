@@ -11,14 +11,6 @@
       <div class="result-score" v-if="score !== null">
         得分: {{ score }}
       </div>
-      <div class="result-actions">
-        <button @click="handleConfirm" class="btn btn-primary">
-          {{ confirmText }}
-        </button>
-        <button v-if="showCancel" @click="handleCancel" class="btn btn-secondary">
-          {{ cancelText }}
-        </button>
-      </div>
     </div>
   </Modal>
 </template>

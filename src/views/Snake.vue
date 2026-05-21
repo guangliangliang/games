@@ -1,8 +1,8 @@
 <template>
   <div class="game-container">
     <header>
-      <router-link to="/" class="back-link">← 返回</router-link>
-      <h1>🐍 贪吃蛇</h1>
+      <BackButton />
+      <h1>🐍 真蛇贪吃蛇</h1>
     </header>
 
     <main>
@@ -22,14 +22,40 @@
           width="400" 
           height="400"
           @keydown="handleKeyPress"
+          @click="canvasRef?.focus()"
           tabindex="0"
         ></canvas>
       </div>
 
       <div class="controls">
-        <button @click="start" class="btn btn-primary" :disabled="gameRunning && !gamePaused">开始游戏</button>
-        <button @click="pause" class="btn btn-secondary" :disabled="!gameRunning || gamePaused">暂停</button>
-        <button @click="restart" class="btn btn-primary">重新开始</button>
+        <div class="difficulty-selector">
+          <span>难度:</span>
+          <button 
+            @click="setDifficulty('easy')" 
+            class="btn-difficulty"
+            :class="{ active: difficulty === 'easy' }"
+            :disabled="gameRunning"
+          >简单</button>
+          <button 
+            @click="setDifficulty('medium')" 
+            class="btn-difficulty"
+            :class="{ active: difficulty === 'medium' }"
+            :disabled="gameRunning"
+          >中等</button>
+          <button 
+            @click="setDifficulty('hard')" 
+            class="btn-difficulty"
+            :class="{ active: difficulty === 'hard' }"
+            :disabled="gameRunning"
+          >困难</button>
+        </div>
+        <div class="game-buttons">
+          <button @click="start" class="btn btn-primary" :disabled="gameRunning && !gamePaused">开始游戏</button>
+          <button @click="pause" class="btn btn-secondary" :disabled="!gameRunning">
+          {{ gamePaused ? '继续' : '暂停' }}
+        </button>
+          <button @click="restart" class="btn btn-primary">重新开始</button>
+        </div>
       </div>
 
       <div class="game-controls">
@@ -57,9 +83,7 @@
       </div>
     </main>
 
-    <footer>
-      <p>经典街机游戏 | 休闲娱乐必备</p>
-    </footer>
+    <PageFooter copyright="真实蛇类效果 | 休闲娱乐必备" />
 
     <!-- 游戏结果弹窗 -->
     <GameResultDialog
@@ -68,11 +92,7 @@
       :message="resultMessage"
       icon="🐍"
       :score="score"
-      confirm-text="再来一局"
-      show-cancel
-      cancel-text="返回主页"
-      @confirm="restart"
-      @cancel="goHome"
+      @update:modelValue="(val) => { if (!val) restart() }"
     />
   </div>
 </template>
@@ -81,11 +101,14 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import GameResultDialog from '../components/GameResultDialog.vue'
+import BackButton from '../components/BackButton.vue'
+import PageFooter from '../components/PageFooter.vue'
 
 const router = useRouter()
 const canvasRef = ref(null)
 const gridSize = 20
 const tileCount = 20
+
 const snake = ref([{x: 10, y: 10}])
 const food = ref({x: 15, y: 15})
 const dx = ref(0)
@@ -96,7 +119,23 @@ const gameRunning = ref(false)
 const gamePaused = ref(false)
 const statusText = ref('点击开始游戏')
 const gameLoop = ref(null)
-const speed = ref(100)
+const difficulty = ref('easy')
+const speed = ref(150)
+const difficultySpeeds = {
+  easy: 150,
+  medium: 100,
+  hard: 60
+}
+
+const setDifficulty = (level) => {
+  difficulty.value = level
+  speed.value = difficultySpeeds[level]
+}
+
+let tongueOut = false
+let tongueTimer = 0
+let tongueProgress = 0
+let animationTime = 0
 
 // 弹窗相关状态
 const showResultDialog = ref(false)
@@ -104,6 +143,12 @@ const resultMessage = ref('')
 
 // 返回主页
 const goHome = () => {
+  // 清理游戏状态
+  if (gameLoop.value) {
+    clearInterval(gameLoop.value)
+  }
+  gameRunning.value = false
+  gamePaused.value = false
   router.push('/')
 }
 
@@ -120,148 +165,237 @@ const generateFood = () => {
   return newFood
 }
 
+const getAngle = (dxVal, dyVal) => {
+  if (dxVal === 1) return 0
+  if (dxVal === -1) return Math.PI
+  if (dyVal === -1) return -Math.PI / 2
+  if (dyVal === 1) return Math.PI / 2
+  return 0
+}
+
+const drawTongue = (ctx, x, y, angle, progress) => {
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.rotate(angle)
+  
+  const tongueLength = 20 * 0.7 * progress
+  const tongueWidth = 2.5
+  
+  ctx.fillStyle = '#e53935'
+  ctx.beginPath()
+  ctx.moveTo(20 * 0.35, -tongueWidth / 2)
+  ctx.lineTo(20 * 0.35 + tongueLength * 0.5, -tongueWidth / 2)
+  ctx.lineTo(20 * 0.35 + tongueLength, -tongueWidth * 1.2)
+  ctx.lineTo(20 * 0.35 + tongueLength * 0.7, -tongueWidth / 2)
+  ctx.lineTo(20 * 0.35 + tongueLength * 0.7, tongueWidth / 2)
+  ctx.lineTo(20 * 0.35 + tongueLength, tongueWidth / 2)
+  ctx.lineTo(20 * 0.35 + tongueLength * 0.5, tongueWidth / 2)
+  ctx.lineTo(20 * 0.35, tongueWidth / 2)
+  ctx.closePath()
+  ctx.fill()
+  
+  ctx.restore()
+}
+
 // 绘制游戏
 const draw = () => {
   const canvas = canvasRef.value
   const ctx = canvas.getContext('2d')
   
-  // 清空画布 - 使用渐变背景
+  animationTime += 16
+  
+  tongueTimer += 16
+  if (tongueTimer > 1800 + Math.random() * 800) {
+    tongueOut = true
+    tongueTimer = 0
+  }
+  
+  if (tongueOut) {
+    tongueProgress += 0.07
+    if (tongueProgress >= 1) tongueOut = false
+  } else if (tongueProgress > 0) {
+    tongueProgress -= 0.07
+    if (tongueProgress < 0) tongueProgress = 0
+  }
+  
   const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height)
   gradient.addColorStop(0, '#1a1a2e')
   gradient.addColorStop(1, '#16213e')
   ctx.fillStyle = gradient
   ctx.fillRect(0, 0, canvas.width, canvas.height)
   
-  // 绘制网格 - 更淡的效果
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)'
   ctx.lineWidth = 0.5
-  
   for (let i = 0; i <= tileCount; i++) {
     ctx.beginPath()
     ctx.moveTo(i * gridSize, 0)
     ctx.lineTo(i * gridSize, canvas.height)
     ctx.stroke()
-    
     ctx.beginPath()
     ctx.moveTo(0, i * gridSize)
     ctx.lineTo(canvas.width, i * gridSize)
     ctx.stroke()
   }
   
-  // 绘制蛇 - 添加霓虹效果
-  snake.value.forEach((segment, index) => {
-    if (index === 0) {
-      // 蛇头 - 发光效果
-      const headGradient = ctx.createRadialGradient(
-        segment.x * gridSize + gridSize / 2,
-        segment.y * gridSize + gridSize / 2,
-        0,
-        segment.x * gridSize + gridSize / 2,
-        segment.y * gridSize + gridSize / 2,
-        gridSize / 2
-      )
-      headGradient.addColorStop(0, '#7fffd4')
-      headGradient.addColorStop(0.7, '#4ecca3')
-      headGradient.addColorStop(1, '#45b393')
+  const segments = snake.value
+  if (segments.length === 0) return
+  
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const segment = segments[i]
+    const x = segment.x * gridSize + gridSize / 2
+    const y = segment.y * gridSize + gridSize / 2
+    const sizeRatio = 0.9 - (i / segments.length) * 0.5
+    const radius = (gridSize / 2) * sizeRatio
+    const waveOffset = Math.sin(animationTime / 200 + i * 0.8) * (1.5 - i * 0.1)
+    const actualX = x + waveOffset
+    const actualY = y
+    
+    if (i === 0) {
+      const headX = x + waveOffset * 0.3
+      const headY = y
+      const angle = getAngle(dx.value, dy.value)
       
+      ctx.save()
+      ctx.translate(headX, headY)
+      ctx.rotate(angle)
+      
+      const headGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 1.3)
+      headGradient.addColorStop(0, '#8bc34a')
+      headGradient.addColorStop(0.5, '#689f38')
+      headGradient.addColorStop(1, '#33691e')
+      
+      ctx.beginPath()
+      ctx.ellipse(0, 0, radius * 1.35, radius * 1.15, 0, 0, Math.PI * 2)
       ctx.fillStyle = headGradient
-      ctx.shadowColor = '#4ecca3'
-      ctx.shadowBlur = 10
+      ctx.fill()
+      ctx.strokeStyle = '#1b5e20'
+      ctx.lineWidth = 2
+      ctx.stroke()
+      ctx.restore()
       
-      ctx.fillRect(
-        segment.x * gridSize + 1,
-        segment.y * gridSize + 1,
-        gridSize - 2,
-        gridSize - 2
-      )
-      
-      ctx.shadowBlur = 0 // 重置阴影
-      
-      // 蛇眼 - 更生动
-      ctx.fillStyle = '#fff'
-      const eyeSize = 4
-      const eyeOffset = 6
-      
-      if (dx.value === 1) { // 向右
-        ctx.fillRect(segment.x * gridSize + 13, segment.y * gridSize + 6, eyeSize, eyeSize)
-        ctx.fillRect(segment.x * gridSize + 13, segment.y * gridSize + 13, eyeSize, eyeSize)
-      } else if (dx.value === -1) { // 向左
-        ctx.fillRect(segment.x * gridSize + 6, segment.y * gridSize + 6, eyeSize, eyeSize)
-        ctx.fillRect(segment.x * gridSize + 6, segment.y * gridSize + 13, eyeSize, eyeSize)
-      } else if (dy.value === -1) { // 向上
-        ctx.fillRect(segment.x * gridSize + 6, segment.y * gridSize + 6, eyeSize, eyeSize)
-        ctx.fillRect(segment.x * gridSize + 13, segment.y * gridSize + 6, eyeSize, eyeSize)
-      } else { // 向下或静止
-        ctx.fillRect(segment.x * gridSize + 6, segment.y * gridSize + 13, eyeSize, eyeSize)
-        ctx.fillRect(segment.x * gridSize + 13, segment.y * gridSize + 13, eyeSize, eyeSize)
+      ctx.save()
+      ctx.translate(headX, headY)
+      ctx.rotate(angle)
+      for (let s = 0; s < 5; s++) {
+        const sx = -radius * 0.5 + s * radius * 0.25
+        const sy = Math.sin(s * 1.5) * radius * 0.2
+        const scaleR = radius * 0.18
+        ctx.beginPath()
+        ctx.arc(sx, sy, scaleR, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(27, 94, 32, 0.35)'
+        ctx.fill()
       }
+      ctx.restore()
       
-      // 眼睛高光
-      ctx.fillStyle = '#000'
-      const pupilSize = 2
-      if (dx.value === 1) {
-        ctx.fillRect(segment.x * gridSize + 15, segment.y * gridSize + 7, pupilSize, pupilSize)
-        ctx.fillRect(segment.x * gridSize + 15, segment.y * gridSize + 14, pupilSize, pupilSize)
-      } else if (dx.value === -1) {
-        ctx.fillRect(segment.x * gridSize + 7, segment.y * gridSize + 7, pupilSize, pupilSize)
-        ctx.fillRect(segment.x * gridSize + 7, segment.y * gridSize + 14, pupilSize, pupilSize)
-      } else if (dy.value === -1) {
-        ctx.fillRect(segment.x * gridSize + 7, segment.y * gridSize + 7, pupilSize, pupilSize)
-        ctx.fillRect(segment.x * gridSize + 14, segment.y * gridSize + 7, pupilSize, pupilSize)
-      } else {
-        ctx.fillRect(segment.x * gridSize + 7, segment.y * gridSize + 14, pupilSize, pupilSize)
-        ctx.fillRect(segment.x * gridSize + 14, segment.y * gridSize + 14, pupilSize, pupilSize)
+      ctx.save()
+      ctx.translate(headX, headY)
+      ctx.rotate(angle)
+      
+      ctx.beginPath()
+      ctx.ellipse(radius * 0.35, -radius * 0.3, 3.5, 3, 0, 0, Math.PI * 2)
+      ctx.fillStyle = '#ffffff'
+      ctx.fill()
+      
+      ctx.beginPath()
+      ctx.ellipse(radius * 0.45, -radius * 0.3, 1.8, 1.4, 0, 0, Math.PI * 2)
+      ctx.fillStyle = '#000000'
+      ctx.fill()
+      
+      ctx.beginPath()
+      ctx.ellipse(radius * 0.35, radius * 0.3, 3.5, 3, 0, 0, Math.PI * 2)
+      ctx.fillStyle = '#ffffff'
+      ctx.fill()
+      
+      ctx.beginPath()
+      ctx.ellipse(radius * 0.45, radius * 0.3, 1.8, 1.4, 0, 0, Math.PI * 2)
+      ctx.fillStyle = '#000000'
+      ctx.fill()
+      ctx.restore()
+      
+      if (tongueProgress > 0.05) {
+        drawTongue(ctx, headX, headY, angle, tongueProgress)
       }
     } else {
-      // 蛇身 - 渐变效果
-      const bodyGradient = ctx.createRadialGradient(
-        segment.x * gridSize + gridSize / 2,
-        segment.y * gridSize + gridSize / 2,
-        0,
-        segment.x * gridSize + gridSize / 2,
-        segment.y * gridSize + gridSize / 2,
-        gridSize / 2
-      )
-      bodyGradient.addColorStop(0, '#5ee0b8')
-      bodyGradient.addColorStop(1, '#45b393')
+      const prevSegment = segments[i - 1]
+      const prevX = prevSegment.x * gridSize + gridSize / 2
+      const prevY = prevSegment.y * gridSize + gridSize / 2
+      const prevSizeRatio = 0.9 - ((i - 1) / segments.length) * 0.5
+      const prevRadius = (gridSize / 2) * prevSizeRatio
+      const prevWaveOffset = Math.sin(animationTime / 200 + (i - 1) * 0.8) * (1.5 - (i - 1) * 0.1)
+      const actualPrevX = prevX + prevWaveOffset
+      const actualPrevY = prevY
       
-      ctx.fillStyle = bodyGradient
-      ctx.fillRect(
-        segment.x * gridSize + 2,
-        segment.y * gridSize + 2,
-        gridSize - 4,
-        gridSize - 4
-      )
+      const alpha = 0.95 - i * 0.02
+      const color = `rgba(139,195,74,${alpha})`
+      
+      // 绘制当前节段
+      ctx.beginPath()
+      ctx.arc(actualX, actualY, radius, 0, Math.PI * 2)
+      ctx.fillStyle = color
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(27,94,32,0.6)'
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+      
+      // 绘制鳞片
+      ctx.beginPath()
+      ctx.arc(actualX, actualY, radius * 0.25, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(27,94,32,0.3)'
+      ctx.fill()
+      
+      // 绘制当前节段和前一节段之间的连接
+      const dx = actualPrevX - actualX
+      const dy = actualPrevY - actualY
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist > 0) {
+        const angle = Math.atan2(dy, dx)
+        
+        ctx.save()
+        ctx.translate(actualX, actualY)
+        ctx.rotate(angle)
+        
+        ctx.beginPath()
+        ctx.rect(0, -radius, dist, radius * 2)
+        ctx.fillStyle = color
+        ctx.fill()
+        
+        ctx.restore()
+      }
     }
-  })
+  }
   
-  // 绘制食物 - 添加脉动效果
-  const pulseRadius = gridSize / 2 - 2 + Math.sin(Date.now() / 200) * 2
-  ctx.fillStyle = '#ff6b6b'
-  ctx.shadowColor = '#ff6b6b'
+  const pulseRadius = gridSize/2 - 2 + Math.sin(animationTime/200)*2
+  const foodX = food.value.x * gridSize + gridSize/2
+  const foodY = food.value.y * gridSize + gridSize/2
+  
+  ctx.fillStyle = '#ff9800'
+  ctx.shadowColor = '#ff9800'
   ctx.shadowBlur = 15
   
   ctx.beginPath()
-  ctx.arc(
-    food.value.x * gridSize + gridSize / 2,
-    food.value.y * gridSize + gridSize / 2,
-    pulseRadius,
-    0,
-    Math.PI * 2
-  )
+  ctx.arc(foodX, foodY, pulseRadius, 0, Math.PI*2)
   ctx.fill()
   
-  // 食物高光
-  ctx.fillStyle = '#fff'
-  ctx.shadowBlur = 0
   ctx.beginPath()
-  ctx.arc(
-    food.value.x * gridSize + gridSize / 2 - 3,
-    food.value.y * gridSize + gridSize / 2 - 3,
-    3,
-    0,
-    Math.PI * 2
-  )
+  ctx.arc(foodX - pulseRadius*0.55, foodY - pulseRadius*0.55, pulseRadius*0.35, 0, Math.PI*2)
+  ctx.fill()
+  
+  ctx.beginPath()
+  ctx.arc(foodX + pulseRadius*0.55, foodY - pulseRadius*0.55, pulseRadius*0.35,0, Math.PI*2)
+  ctx.fill()
+  
+  ctx.shadowBlur = 0
+  ctx.fillStyle = '#000'
+  ctx.beginPath()
+  ctx.arc(foodX - pulseRadius*0.3, foodY - pulseRadius*0.1, pulseRadius*0.12,0,Math.PI*2)
+  ctx.fill()
+  ctx.beginPath()
+  ctx.arc(foodX + pulseRadius*0.3, foodY - pulseRadius*0.1, pulseRadius*0.12,0,Math.PI*2)
+  ctx.fill()
+  
+  ctx.fillStyle = '#ff5252'
+  ctx.beginPath()
+  ctx.arc(foodX, foodY + pulseRadius*0.2, pulseRadius*0.15,0,Math.PI*2)
   ctx.fill()
 }
 
@@ -346,6 +480,8 @@ const start = () => {
     dy.value = 0
   }
   
+  // 使用当前难度的速度
+  speed.value = difficultySpeeds[difficulty.value]
   gameLoop.value = setInterval(update, speed.value)
   statusText.value = '游戏进行中'
 }
@@ -377,6 +513,8 @@ const restart = () => {
   gameRunning.value = false
   gamePaused.value = false
   
+  // 重置速度为当前难度
+  speed.value = difficultySpeeds[difficulty.value]
   statusText.value = '点击开始游戏'
   draw()
 }
@@ -472,12 +610,18 @@ onMounted(() => {
   const canvas = canvasRef.value
   canvas.addEventListener('touchstart', handleTouchStart)
   canvas.addEventListener('touchend', handleTouchEnd)
+  
+  // 绑定全局键盘事件
+  window.addEventListener('keydown', handleKeyPress)
 })
 
 onUnmounted(() => {
   if (gameLoop.value) {
     clearInterval(gameLoop.value)
   }
+  
+  // 移除全局键盘事件
+  window.removeEventListener('keydown', handleKeyPress)
 })
 </script>
 
@@ -486,6 +630,9 @@ onUnmounted(() => {
   max-width: 900px;
   margin: 0 auto;
   padding: 20px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 header {
@@ -496,14 +643,14 @@ header {
 }
 
 h1 {
-  font-size: 3em;
+  font-size: 2.5em;
   margin: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  text-shadow: none;
-  filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+  padding-left: 80px;
+  color: #ffffff;
+  text-shadow: 
+    0 0 10px rgba(255, 255, 255, 0.8),
+    0 0 20px rgba(102, 126, 234, 0.6),
+    0 2px 4px rgba(0, 0, 0, 0.5);
   animation: titlePulse 2s ease-in-out infinite;
 }
 
@@ -512,28 +659,7 @@ h1 {
   50% { transform: scale(1.02); }
 }
 
-.back-link {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  color: white;
-  text-decoration: none;
-  font-size: 1.1em;
-  transition: all 0.3s;
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
 
-.back-link:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-50%) translateX(5px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
 
 main {
   background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
@@ -619,10 +745,52 @@ canvas:focus {
 
 .controls {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   gap: 20px;
   margin: 25px 0;
   flex-wrap: wrap;
+}
+
+.difficulty-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #333;
+  font-weight: 600;
+}
+
+.btn-difficulty {
+  padding: 8px 20px;
+  border: 2px solid #667eea;
+  background: white;
+  color: #667eea;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+.btn-difficulty:hover {
+  background: #f0f0ff;
+}
+
+.btn-difficulty.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: transparent;
+}
+
+.btn-difficulty:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.game-buttons {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .btn {

@@ -35,13 +35,12 @@
       </div>
     </main>
 
-    <footer>
-      <p>&copy; 2024 游戏集合 | Vue3 + Vite 构建</p>
-    </footer>
+    <PageFooter />
   </div>
 </template>
 
 <script setup>
+import PageFooter from '../components/PageFooter.vue'
 </script>
 
 <style scoped>
@@ -49,6 +48,9 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 header {
@@ -124,13 +126,7 @@ h1 {
   color: #999;
 }
 
-footer {
-  text-align: center;
-  color: white;
-  margin-top: 60px;
-  padding: 20px;
-  opacity: 0.8;
-}
+
 
 @media (max-width: 768px) {
   h1 {
