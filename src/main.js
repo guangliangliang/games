@@ -14,6 +14,7 @@ const routes = [
   { path: '/tetris', name: 'Tetris', component: () => import('./views/Tetris.vue') },
   { path: '/flappy-bird', name: 'FlappyBird', component: () => import('./views/FlappyBird.vue') },
   { path: '/whack-a-mole', name: 'WhackAMole', component: () => import('./views/WhackAMole.vue') },
+  { path: '/animal-match', name: 'AnimalMatch', component: () => import('./views/AnimalMatch.vue') },
   { path: '/dialog-demo', name: 'DialogDemo', component: () => import('./views/DialogDemo.vue') }
 ]
 
