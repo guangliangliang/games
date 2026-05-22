@@ -46,19 +46,58 @@
         </div>
       </router-link>
 
-      <!-- 2048游戏卡片 -->
-      <router-link to="/2048" class="game-card">
-        <div class="game-icon">🎮</div>
-        <h2 class="game-title">2048</h2>
-        <p class="game-description">
-          经典益智游戏，移动方块合并相同数字，目标合成2048！
-        </p>
-        <div class="game-info">
-          <span class="difficulty">难度: ⭐⭐</span>
-          <span>单人游戏</span>
-        </div>
-      </router-link>
-    </div>
+       <!-- 2048游戏卡片 -->
+       <router-link to="/2048" class="game-card">
+         <div class="game-icon">🎮</div>
+         <h2 class="game-title">2048</h2>
+         <p class="game-description">
+           经典益智游戏，移动方块合并相同数字，目标合成2048！
+         </p>
+         <div class="game-info">
+           <span class="difficulty">难度: ⭐⭐</span>
+           <span>单人游戏</span>
+         </div>
+       </router-link>
+
+       <!-- 俄罗斯方块游戏卡片 -->
+       <router-link to="/tetris" class="game-card">
+         <div class="game-icon">🧱</div>
+         <h2 class="game-title">俄罗斯方块</h2>
+         <p class="game-description">
+           经典永不过时！移动、旋转和消除方块，挑战最高分
+         </p>
+         <div class="game-info">
+           <span class="difficulty">难度: ⭐⭐⭐</span>
+           <span>单人游戏</span>
+         </div>
+       </router-link>
+
+       <!-- Flappy Bird游戏卡片 -->
+       <router-link to="/flappy-bird" class="game-card">
+         <div class="game-icon">🐦</div>
+         <h2 class="game-title">Flappy Bird</h2>
+         <p class="game-description">
+           经典爆款！点击让小鸟飞翔，不要撞到水管！
+         </p>
+         <div class="game-info">
+           <span class="difficulty">难度: ⭐⭐⭐⭐</span>
+           <span>单人游戏</span>
+         </div>
+       </router-link>
+
+       <!-- 打地鼠游戏卡片 -->
+       <router-link to="/whack-a-mole" class="game-card">
+         <div class="game-icon">🔨</div>
+         <h2 class="game-title">打地鼠</h2>
+         <p class="game-description">
+           考验你的反应力！快速点击冒出来的地鼠得分！
+         </p>
+         <div class="game-info">
+           <span class="difficulty">难度: ⭐⭐</span>
+           <span>单人游戏</span>
+         </div>
+       </router-link>
+     </div>
     </main>
 
     <footer>
