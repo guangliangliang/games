@@ -109,6 +109,18 @@
           <span>单人游戏</span>
         </div>
       </router-link>
+      
+      <router-link to="/tic-tac-toe" class="game-card">
+        <div class="game-icon">⭕</div>
+        <h2 class="game-title">井字棋</h2>
+        <p class="game-description">
+          经典井字棋游戏！支持人机对战和双人对战，AI有三个难度！
+        </p>
+        <div class="game-info">
+          <span class="difficulty">难度: ⭐⭐</span>
+          <span>人机/双人</span>
+        </div>
+      </router-link>
     </div>
   </main>
 

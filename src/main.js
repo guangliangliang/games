@@ -15,6 +15,7 @@ const routes = [
   { path: '/flappy-bird', name: 'FlappyBird', component: () => import('./views/FlappyBird.vue') },
   { path: '/whack-a-mole', name: 'WhackAMole', component: () => import('./views/WhackAMole.vue') },
   { path: '/animal-match', name: 'AnimalMatch', component: () => import('./views/AnimalMatch.vue') },
+  { path: '/tic-tac-toe', name: 'TicTacToe', component: () => import('./views/TicTacToe.vue') },
   { path: '/dialog-demo', name: 'DialogDemo', component: () => import('./views/DialogDemo.vue') }
 ]
 
