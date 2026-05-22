@@ -9,6 +9,8 @@ const routes = [
   { path: '/', name: 'Home', component: Home },
   { path: '/gomoku', name: 'Gomoku', component: () => import('./views/Gomoku.vue') },
   { path: '/snake', name: 'Snake', component: () => import('./views/Snake.vue') },
+  { path: '/thunder-fighter', name: 'ThunderFighter', component: () => import('./views/ThunderFighter.vue') },
+  { path: '/2048', name: 'Game2048', component: () => import('./views/Game2048.vue') },
   { path: '/dialog-demo', name: 'DialogDemo', component: () => import('./views/DialogDemo.vue') }
 ]
 

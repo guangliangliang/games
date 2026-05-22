@@ -32,7 +32,33 @@
             <span>单人游戏</span>
           </div>
         </router-link>
-      </div>
+
+      <!-- 雷霆战机游戏卡片 -->
+      <router-link to="/thunder-fighter" class="game-card">
+        <div class="game-icon">✈️</div>
+        <h2 class="game-title">雷霆战机</h2>
+        <p class="game-description">
+          经典射击游戏，控制战机消灭敌机，升级武器挑战最高分
+        </p>
+        <div class="game-info">
+          <span class="difficulty">难度: ⭐⭐⭐</span>
+          <span>单人游戏</span>
+        </div>
+      </router-link>
+
+      <!-- 2048游戏卡片 -->
+      <router-link to="/2048" class="game-card">
+        <div class="game-icon">🎮</div>
+        <h2 class="game-title">2048</h2>
+        <p class="game-description">
+          经典益智游戏，移动方块合并相同数字，目标合成2048！
+        </p>
+        <div class="game-info">
+          <span class="difficulty">难度: ⭐⭐</span>
+          <span>单人游戏</span>
+        </div>
+      </router-link>
+    </div>
     </main>
 
     <footer>
