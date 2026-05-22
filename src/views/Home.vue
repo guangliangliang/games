@@ -97,19 +97,6 @@
             <span>单人游戏</span>
           </div>
         </router-link>
-
-        <!-- 动物消消乐游戏卡片 -->
-        <router-link to="/animal-match" class="game-card">
-          <div class="game-icon">🐾</div>
-          <h2 class="game-title">动物消消乐</h2>
-          <p class="game-description">
-            可爱的动物消除游戏！交换配对，挑战最高分！
-          </p>
-          <div class="game-info">
-            <span class="difficulty">难度: ⭐⭐</span>
-            <span>单人游戏</span>
-          </div>
-        </router-link>
       </div>
     </main>
 
