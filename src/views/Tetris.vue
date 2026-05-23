@@ -46,27 +46,29 @@
           </div>
         </div>
       </div>
+      
+      <!-- 虚拟控制按钮 - 移动端优先 -->
       <div class="virtual-controls">
         <div class="virtual-row">
-          <button class="virtual-btn virtual-btn-left" @touchstart.prevent="moveLeft" @mousedown.prevent="moveLeft">
+          <button class="virtual-btn virtual-btn-left" :class="{ 'virtual-btn-disabled': !gameRunning || gamePaused }" @touchstart.prevent="moveLeft" @mousedown.prevent="moveLeft">
             <span class="btn-icon">←</span>
             <span class="btn-label">左移</span>
           </button>
-          <button class="virtual-btn virtual-btn-rotate" @touchstart.prevent="rotatePiece" @mousedown.prevent="rotatePiece">
+          <button class="virtual-btn virtual-btn-rotate" :class="{ 'virtual-btn-disabled': !gameRunning || gamePaused }" @touchstart.prevent="rotatePiece" @mousedown.prevent="rotatePiece">
             <span class="btn-icon">↻</span>
             <span class="btn-label">旋转</span>
           </button>
-          <button class="virtual-btn virtual-btn-right" @touchstart.prevent="moveRight" @mousedown.prevent="moveRight">
+          <button class="virtual-btn virtual-btn-right" :class="{ 'virtual-btn-disabled': !gameRunning || gamePaused }" @touchstart.prevent="moveRight" @mousedown.prevent="moveRight">
             <span class="btn-icon">→</span>
             <span class="btn-label">右移</span>
           </button>
         </div>
         <div class="virtual-row">
-          <button class="virtual-btn virtual-btn-down" @touchstart.prevent="moveDown" @mousedown.prevent="moveDown">
+          <button class="virtual-btn virtual-btn-down" :class="{ 'virtual-btn-disabled': !gameRunning || gamePaused }" @touchstart.prevent="moveDown" @mousedown.prevent="moveDown">
             <span class="btn-icon">↓</span>
             <span class="btn-label">加速</span>
           </button>
-          <button class="virtual-btn virtual-btn-drop" @touchstart.prevent="hardDropWrapped" @mousedown.prevent="hardDropWrapped">
+          <button class="virtual-btn virtual-btn-drop" :class="{ 'virtual-btn-disabled': !gameRunning || gamePaused }" @touchstart.prevent="hardDropWrapped" @mousedown.prevent="hardDropWrapped">
             <span class="btn-icon">⬇</span>
             <span class="btn-label">速降</span>
           </button>
@@ -80,9 +82,9 @@
         >
           {{ gamePaused ? '继续' : (gameRunning ? '游戏进行中' : '开始游戏') }}</button
         ><button
+          v-if="gameRunning"
           @click="togglePause"
           class="btn btn-secondary"
-          :disabled="!gameRunning"
         >
           {{ gamePaused ? '继续' : '暂停' }}</button
         ><button @click="restartGame" class="btn btn-primary">重新开始</button>
@@ -361,11 +363,59 @@ const togglePause = () => {
 };
 const restartGame = () => {
   clearInterval(gameLoop);
-  startGame();
+  // 完全重置到初始状态
+  createBoard();
+  score.value = 0;
+  lines.value = 0;
+  level.value = 1;
+  dropInterval = 1000;
+  gameOver.value = false;
+  gamePaused.value = false;
+  showResultDialog.value = false;
+  gameRunning.value = false;
+  currentPiece = null;
+  nextPiece = null;
+  drawBoard();
+  drawNextPiece();
 };
 const goHome = () => {
   clearInterval(gameLoop);
   router.push("/");
+};
+
+// 虚拟控制按钮函数
+const moveLeft = () => {
+  if (!gameRunning.value || gamePaused.value) return;
+  if (!collision(currentPiece, -1, 0)) currentX--;
+  drawBoard();
+};
+
+const moveRight = () => {
+  if (!gameRunning.value || gamePaused.value) return;
+  if (!collision(currentPiece, 1, 0)) currentX++;
+  drawBoard();
+};
+
+const moveDown = () => {
+  if (!gameRunning.value || gamePaused.value) return;
+  if (!collision(currentPiece, 0, 1)) {
+    currentY++;
+    score.value += 1;
+  }
+  drawBoard();
+};
+
+const rotatePiece = () => {
+  if (!gameRunning.value || gamePaused.value) return;
+  const rotated = rotate(currentPiece);
+  if (!collision(rotated, 0, 0)) currentPiece = rotated;
+  drawBoard();
+};
+
+const hardDropWrapped = () => {
+  if (!gameRunning.value || gamePaused.value) return;
+  hardDrop();
+  drawBoard();
 };
 
 // 触摸事件相关
@@ -412,24 +462,38 @@ const handleTouchEnd = (e) => {
 };
 
 const handleKeyDown = (e) => {
-  if (!gameRunning.value || gamePaused.value) {
-    if (e.key === " " || e.key === "Enter") startGame();
+  if (!gameRunning.value) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      startGame();
+    }
+    return;
+  }
+  if (gamePaused.value) {
+    if (e.key === "p" || e.key === "P" || e.key === "Enter") {
+      e.preventDefault();
+      togglePause();
+    }
     return;
   }
   switch (e.key) {
     case "ArrowLeft":
+      e.preventDefault();
       if (!collision(currentPiece, -1, 0)) currentX--;
       break;
     case "ArrowRight":
+      e.preventDefault();
       if (!collision(currentPiece, 1, 0)) currentX++;
       break;
     case "ArrowDown":
+      e.preventDefault();
       if (!collision(currentPiece, 0, 1)) {
         currentY++;
         score.value += 1;
       }
       break;
     case "ArrowUp":
+      e.preventDefault();
       const rotated = rotate(currentPiece);
       if (!collision(rotated, 0, 0)) currentPiece = rotated;
       break;
@@ -632,12 +696,16 @@ canvas {
   box-shadow: 0 0 30px rgba(102, 126, 234, 0.3);
   border: 3px solid #667eea;
 }
+/* 虚拟控制按钮样式 - 桌面端 */
 .virtual-controls {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
   margin: 25px 0;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+  border-radius: 20px;
 }
 
 .virtual-row {
@@ -646,11 +714,11 @@ canvas {
 }
 
 .virtual-btn {
-  width: 75px;
-  height: 75px;
-  font-size: 2em;
+  width: 80px;
+  height: 80px;
+  font-size: 2.2em;
   border: none;
-  border-radius: 16px;
+  border-radius: 18px;
   cursor: pointer;
   background: linear-gradient(135deg, #667eea, #764ba2);
   color: white;
@@ -661,14 +729,20 @@ canvas {
   justify-content: center;
   align-items: center;
   gap: 4px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .virtual-btn .btn-icon {
-  font-size: 1.2em;
+  font-size: 1.3em;
+  line-height: 1;
 }
 
 .virtual-btn .btn-label {
-  font-size: 0.5em;
+  font-size: 0.45em;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .virtual-btn:hover {
@@ -678,6 +752,14 @@ canvas {
 
 .virtual-btn:active {
   transform: scale(0.95);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.virtual-btn-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: linear-gradient(135deg, #888, #666);
 }
 
 @media (max-width: 768px) {
@@ -699,29 +781,40 @@ canvas {
     gap: 16px;
   }
 
+  /* 增强虚拟控制按钮的移动端样式 */
   .virtual-controls {
-    gap: 16px;
-    margin: 20px 0;
+    gap: 12px;
+    margin: 24px 0;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+    border-radius: 24px;
   }
 
   .virtual-row {
-    gap: 16px;
+    gap: 12px;
   }
 
   .virtual-btn {
-    width: 90px;
-    height: 90px;
-    font-size: 2.5em;
-    border-radius: 20px;
-    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.6);
+    width: 100px;
+    height: 100px;
+    font-size: 2.8em;
+    border-radius: 24px;
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.5);
+    border: 3px solid rgba(255, 255, 255, 0.3);
   }
 
   .virtual-btn .btn-icon {
-    font-size: 1.4em;
+    font-size: 1.5em;
   }
 
   .virtual-btn .btn-label {
-    font-size: 0.45em;
+    font-size: 0.4em;
+    font-weight: bold;
+  }
+
+  .virtual-btn:hover, .virtual-btn:active {
+    transform: scale(0.95);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
   }
 
   canvas {
