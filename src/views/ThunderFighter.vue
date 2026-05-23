@@ -1,7 +1,7 @@
 <template>
   <div class="game-container">
     <header>
-      <router-link to="/" class="back-link">← 返回</router-link>
+      <BackButton />
       <h1>✈️ 雷霆战机</h1>
     </header>
 
@@ -42,9 +42,32 @@
       </div>
 
       <div class="controls">
-        <button @click="startGame" class="btn btn-primary" :disabled="gameRunning && !gamePaused">开始游戏</button>
-        <button @click="pauseGame" class="btn btn-secondary" :disabled="!gameRunning || gamePaused">暂停</button>
-        <button @click="restartGame" class="btn btn-primary">重新开始</button>
+        <div class="difficulty-selector">
+          <span>难度：</span>
+          <button
+            @click="setDifficulty('easy')"
+            class="btn-difficulty"
+            :class="{ active: difficulty === 'easy' }"
+            :disabled="gameRunning && !gamePaused"
+          >简单</button>
+          <button
+            @click="setDifficulty('normal')"
+            class="btn-difficulty"
+            :class="{ active: difficulty === 'normal' }"
+            :disabled="gameRunning && !gamePaused"
+          >普通</button>
+          <button
+            @click="setDifficulty('hard')"
+            class="btn-difficulty"
+            :class="{ active: difficulty === 'hard' }"
+            :disabled="gameRunning && !gamePaused"
+          >困难</button>
+        </div>
+        <div class="game-buttons">
+          <button @click="startGame" class="btn btn-primary" :disabled="gameRunning && !gamePaused">开始游戏</button>
+          <button @click="pauseGame" class="btn btn-secondary" :disabled="!gameRunning">{{ gamePaused ? '继续' : '暂停' }}</button>
+          <button @click="restartGame" class="btn btn-primary">重新开始</button>
+        </div>
       </div>
 
       <div class="game-controls">
@@ -95,6 +118,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import GameResultDialog from '../components/GameResultDialog.vue'
+import BackButton from '../components/BackButton.vue'
 
 const router = useRouter()
 const canvasRef = ref(null)
@@ -109,6 +133,19 @@ const gameRunning = ref(false)
 const gamePaused = ref(false)
 const statusText = ref('点击开始游戏')
 const gameLoop = ref(null)
+
+// 难度选择
+const difficulty = ref('normal')
+const difficultySettings = {
+  easy: { spawnRate: 0.012, maxSpawnRate: 0.025, scoreDivider: 300000 },
+  normal: { spawnRate: 0.02, maxSpawnRate: 0.04, scoreDivider: 200000 },
+  hard: { spawnRate: 0.028, maxSpawnRate: 0.055, scoreDivider: 150000 }
+}
+const difficultyLabels = {
+  easy: '简单',
+  normal: '普通',
+  hard: '困难'
+}
 
 // 弹窗状态
 const showResultDialog = ref(false)
@@ -998,8 +1035,13 @@ const gameLoopFunction = () => {
     }
   }
   
-  // 生成敌机
-  if (Math.random() < 0.02 + score.value / 50000) {
+  // 生成敌机 - 根据难度设置
+  const settings = difficultySettings[difficulty.value]
+  const spawnRate = Math.min(
+    settings.spawnRate + score.value / settings.scoreDivider,
+    settings.maxSpawnRate
+  )
+  if (Math.random() < spawnRate) {
     spawnEnemy()
   }
   
@@ -1036,6 +1078,11 @@ const pauseGame = () => {
   if (!gameRunning.value) return
   gamePaused.value = !gamePaused.value
   statusText.value = gamePaused.value ? '游戏已暂停' : '游戏进行中'
+}
+
+// 设置难度
+const setDifficulty = (level) => {
+  difficulty.value = level
 }
 
 // 重新开始
@@ -1130,23 +1177,35 @@ const handleKeyUp = (e) => {
   }
 }
 
+// 获取画布上的坐标（考虑缩放）
+const getCanvasCoordinates = (clientX, clientY) => {
+  const canvas = canvasRef.value
+  const rect = canvas.getBoundingClientRect()
+  const scaleX = canvas.width / rect.width
+  const scaleY = canvas.height / rect.height
+  return {
+    x: (clientX - rect.left) * scaleX,
+    y: (clientY - rect.top) * scaleY
+  }
+}
+
 // 触屏事件
 const handleTouchStart = (e) => {
   e.preventDefault()
   const touch = e.touches[0]
-  const rect = canvasRef.value.getBoundingClientRect()
   isTouching.value = true
-  touchX.value = touch.clientX - rect.left
-  touchY.value = touch.clientY - rect.top
+  const coords = getCanvasCoordinates(touch.clientX, touch.clientY)
+  touchX.value = coords.x
+  touchY.value = coords.y
 }
 
 const handleTouchMove = (e) => {
   e.preventDefault()
   if (!isTouching.value) return
   const touch = e.touches[0]
-  const rect = canvasRef.value.getBoundingClientRect()
-  touchX.value = touch.clientX - rect.left
-  touchY.value = touch.clientY - rect.top
+  const coords = getCanvasCoordinates(touch.clientX, touch.clientY)
+  touchX.value = coords.x
+  touchY.value = coords.y
 }
 
 const handleTouchEnd = (e) => {
@@ -1184,11 +1243,12 @@ header {
 h1 {
   font-size: 2.8em;
   margin: 0;
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+  padding-left: 80px;
+  color: #ffffff;
+  text-shadow: 
+    0 0 10px rgba(255, 255, 255, 0.8),
+    0 0 20px rgba(102, 126, 234, 0.6),
+    0 2px 4px rgba(0, 0, 0, 0.5);
   animation: titlePulse 2s ease-in-out infinite;
 }
 
@@ -1297,10 +1357,52 @@ canvas:focus {
 
 .controls {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   gap: 20px;
   margin: 25px 0;
   flex-wrap: wrap;
+}
+
+.difficulty-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #333;
+  font-weight: 600;
+}
+
+.game-buttons {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.btn-difficulty {
+  padding: 8px 20px;
+  border: 2px solid #4facfe;
+  background: white;
+  color: #4facfe;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+.btn-difficulty:hover {
+  background: #f0f8ff;
+}
+
+.btn-difficulty.active {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+  border-color: transparent;
+}
+
+.btn-difficulty:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn {
@@ -1478,8 +1580,18 @@ footer {
     flex-direction: column;
   }
 
+  .game-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+
   .btn {
     width: 100%;
+  }
+
+  .difficulty-selector {
+    flex-direction: column;
+    gap: 8px;
   }
 
   .control-methods {

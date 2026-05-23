@@ -1,7 +1,7 @@
 <template>
   <div class="game-container">
     <header>
-      <router-link to="/" class="back-link">← 返回</router-link>
+      <BackButton />
       <h1>⭕⭕ 井字棋</h1>
     </header>
     <main>
@@ -85,13 +85,14 @@
 import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import GameResultDialog from "../components/GameResultDialog.vue";
+import BackButton from "../components/BackButton.vue";
 const router = useRouter();
 const canvasRef = ref(null);
 const board = ref([]);
 const currentPlayer = ref(1);
 const gameStatus = ref("");
 const gameOver = ref(false);
-const gameRunning = ref(true);
+const gameRunning = ref(false);
 const gameMode = ref("pve");
 const difficulty = ref("hard");
 const showResultDialog = ref(false);
@@ -258,6 +259,7 @@ const checkGameState = () => {
   const winner = checkWinner(board.value);
   if (winner === 1) {
     gameOver.value = true;
+    gameRunning.value = false;
     gameStatus.value = "🎉 玩家获胜！";
     resultTitle.value = "恭喜获胜";
     resultMessage.value = "你赢了电脑！";
@@ -267,6 +269,7 @@ const checkGameState = () => {
     }, 500);
   } else if (winner === 2) {
     gameOver.value = true;
+    gameRunning.value = false;
     gameStatus.value = "😢 电脑获胜";
     resultTitle.value = "游戏结束";
     resultMessage.value = "电脑赢了，再接再厉！";
@@ -276,6 +279,7 @@ const checkGameState = () => {
     }, 500);
   } else if (winner === 0) {
     gameOver.value = true;
+    gameRunning.value = false;
     gameStatus.value = "🤝 平局！";
     resultTitle.value = "游戏结束";
     resultMessage.value = "平局！势均力敌！";
@@ -295,6 +299,7 @@ const handleCanvasClick = (e) => {
   const row = Math.floor(y / cellSize);
   const index = row * 3 + col;
   if (board.value[index] === 0) {
+    gameRunning.value = true;
     board.value[index] = currentPlayer.value;
     checkGameState();
     if (!gameOver.value) {
@@ -311,6 +316,7 @@ const restartGame = () => {
   currentPlayer.value = 1;
   gameStatus.value = "";
   gameOver.value = false;
+  gameRunning.value = false;
   showResultDialog.value = false;
   drawBoard();
 };
@@ -334,10 +340,18 @@ header {
 h1 {
   font-size: 3em;
   margin: 0;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  padding-left: 80px;
+  color: #ffffff;
+  text-shadow: 
+    0 0 10px rgba(255, 255, 255, 0.8),
+    0 0 20px rgba(102, 126, 234, 0.6),
+    0 2px 4px rgba(0, 0, 0, 0.5);
+  animation: titlePulse 2s ease-in-out infinite;
+}
+
+@keyframes titlePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
 }
 .back-link {
   position: absolute;
@@ -420,6 +434,8 @@ canvas {
   border-radius: 15px;
   cursor: pointer;
   box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .controls {
   display: flex;

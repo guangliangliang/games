@@ -1,7 +1,7 @@
 <template>
   <div class="game-container">
     <header>
-      <router-link to="/" class="back-link">← 返回</router-link>
+      <BackButton />
       <h1>🐦 Flappy Bird</h1>
     </header>
     <main>
@@ -14,6 +14,19 @@
           <div class="score-label">最高分</div>
           <div class="score-value">{{ highScore }}</div>
         </div>
+        <div class="difficulty-selector">
+          <label>难度：</label>
+          <button
+            v-for="d in difficulties"
+            :key="d.value"
+            class="difficulty-btn"
+            :class="{ active: difficulty === d.value }"
+            @click="setDifficulty(d.value)"
+            :disabled="gameRunning"
+          >
+            {{ d.label }}
+          </button>
+        </div>
         <div class="game-status" v-if="!gameRunning && !showResultDialog">
           点击开始!
         </div>
@@ -21,13 +34,13 @@
       <div class="board-container">
         <canvas
           ref="canvasRef"
-          width="400"
-          height="600"
+          :width="canvasWidth"
+          :height="canvasHeight"
           @click="handleClick"
           @touchstart.prevent="handleClick"
         ></canvas>
         <div class="game-overlay" v-if="!gameRunning && !gameOver">
-          点击或按空格开始
+          点击开始
         </div>
       </div>
       <div class="controls">
@@ -78,20 +91,49 @@
   </div>
 </template>
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted, computed } from "vue";
 import { useRouter } from "vue-router";
 import GameResultDialog from "../components/GameResultDialog.vue";
+import BackButton from "../components/BackButton.vue";
 const router = useRouter();
 const canvasRef = ref(null);
-const GRAVITY = 0.5;
-const JUMP_STRENGTH = -10;
-const PIPE_SPEED = 2;
-const PIPE_GAP = 180;
+const canvasWidth = 400;
+const canvasHeight = 600;
+const difficulties = [
+  { label: "简单", value: "easy" },
+  { label: "普通", value: "normal" },
+  { label: "困难", value: "hard" },
+];
+const difficulty = ref("normal");
+const difficultyConfig = {
+  easy: {
+    gravity: 0.3,
+    jumpStrength: -8,
+    pipeSpeed: 1.2,
+    pipeGap: 230,
+    pipeSpacing: 340,
+  },
+  normal: {
+    gravity: 0.4,
+    jumpStrength: -9,
+    pipeSpeed: 1.5,
+    pipeGap: 190,
+    pipeSpacing: 300,
+  },
+  hard: {
+    gravity: 0.5,
+    jumpStrength: -10,
+    pipeSpeed: 2.0,
+    pipeGap: 160,
+    pipeSpacing: 260,
+  },
+};
+const currentConfig = computed(() => difficultyConfig[difficulty.value]);
 const PIPE_WIDTH = 60;
-const PIPE_SPACING = 250;
 const bird = { x: 80, y: 250, width: 40, height: 30, velocity: 0 };
 const pipes = [];
 let frameCount = 0;
+let lastPipeFrame = 0;
 const score = ref(0);
 const highScore = ref(parseInt(localStorage.getItem("flappy-high")) || 0);
 const gameRunning = ref(false);
@@ -139,11 +181,11 @@ const drawPipe = (ctx, pipe) => {
   ctx.fillRect(pipe.x - 5, pipe.top - 30, PIPE_WIDTH + 10, 30);
   ctx.fillRect(
     pipe.x,
-    pipe.top + PIPE_GAP,
+    pipe.top + currentConfig.value.pipeGap,
     PIPE_WIDTH,
-    600 - pipe.top - PIPE_GAP,
+    600 - pipe.top - currentConfig.value.pipeGap,
   );
-  ctx.fillRect(pipe.x - 5, pipe.top + PIPE_GAP, PIPE_WIDTH + 10, 30);
+  ctx.fillRect(pipe.x - 5, pipe.top + currentConfig.value.pipeGap, PIPE_WIDTH + 10, 30);
   ctx.shadowBlur = 0;
 };
 const drawBackground = (ctx) => {
@@ -175,10 +217,13 @@ const jump = () => {
     if (!gameOver.value) startGame();
     return;
   }
-  bird.velocity = JUMP_STRENGTH;
+  bird.velocity = currentConfig.value.jumpStrength;
 };
 const handleClick = () => {
   jump();
+};
+const setDifficulty = (diff) => {
+  difficulty.value = diff;
 };
 const createPipe = () => {
   const minHeight = 80;
@@ -190,7 +235,7 @@ const checkCollision = () => {
   if (bird.y + 15 > 500 || bird.y - 15 < 0) return true;
   for (const pipe of pipes) {
     if (bird.x + 15 > pipe.x && bird.x - 15 < pipe.x + PIPE_WIDTH) {
-      if (bird.y - 15 < pipe.top || bird.y + 15 > pipe.top + PIPE_GAP)
+      if (bird.y - 15 < pipe.top || bird.y + 15 > pipe.top + currentConfig.value.pipeGap)
         return true;
     }
   }
@@ -201,11 +246,15 @@ const gameLoop = () => {
   drawBackground(ctx);
   frameCount++;
   if (gameRunning.value) {
-    bird.velocity += GRAVITY;
+    bird.velocity += currentConfig.value.gravity;
     bird.y += bird.velocity;
-    if (frameCount % 100 === 0) createPipe();
+    const pipeInterval = Math.floor(currentConfig.value.pipeSpacing / currentConfig.value.pipeSpeed);
+    if (frameCount - lastPipeFrame > pipeInterval) {
+      createPipe();
+      lastPipeFrame = frameCount;
+    }
     for (let i = pipes.length - 1; i >= 0; i--) {
-      pipes[i].x -= PIPE_SPEED;
+      pipes[i].x -= currentConfig.value.pipeSpeed;
       if (!pipes[i].passed && pipes[i].x + PIPE_WIDTH < bird.x) {
         pipes[i].passed = true;
         score.value++;
@@ -231,13 +280,21 @@ const gameLoop = () => {
   ctx.shadowBlur = 0;
   animationId = requestAnimationFrame(gameLoop);
 };
-const startGame = () => {
+const resetGame = () => {
+  bird.x = 80;
   bird.y = 250;
   bird.velocity = 0;
   pipes.length = 0;
+  frameCount = 0;
+  lastPipeFrame = 0;
   score.value = 0;
   gameOver.value = false;
   showResultDialog.value = false;
+  gameRunning.value = false;
+};
+const startGame = () => {
+  resetGame();
+  bird.velocity = currentConfig.value.jumpStrength;
   gameRunning.value = true;
 };
 const endGame = () => {
@@ -250,7 +307,11 @@ const endGame = () => {
 };
 const restartGame = () => {
   cancelAnimationFrame(animationId);
-  startGame();
+  resetGame();
+  const ctx = canvasRef.value.getContext("2d");
+  drawBackground(ctx);
+  drawBird(ctx);
+  gameLoop();
 };
 const goHome = () => {
   cancelAnimationFrame(animationId);
@@ -263,8 +324,10 @@ const handleKeyDown = (e) => {
   }
 };
 onMounted(() => {
+  resetGame();
   const ctx = canvasRef.value.getContext("2d");
   drawBackground(ctx);
+  drawBird(ctx);
   window.addEventListener("keydown", handleKeyDown);
   gameLoop();
 });
@@ -288,10 +351,18 @@ header {
 h1 {
   font-size: 3em;
   margin: 0;
-  background: linear-gradient(135deg, #2ecc71, #27ae60);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  padding-left: 80px;
+  color: #ffffff;
+  text-shadow: 
+    0 0 10px rgba(255, 255, 255, 0.8),
+    0 0 20px rgba(102, 126, 234, 0.6),
+    0 2px 4px rgba(0, 0, 0, 0.5);
+  animation: titlePulse 2s ease-in-out infinite;
+}
+
+@keyframes titlePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
 }
 .back-link {
   position: absolute;
@@ -345,9 +416,109 @@ main {
 }
 .board-container {
   position: relative;
-  width: 400px;
+  width: 100%;
+  max-width: 400px;
   margin: 0 auto;
   cursor: pointer;
+  display: flex;
+  justify-content: center;
+}
+.board-container canvas {
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  touch-action: manipulation;
+}
+.difficulty-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.difficulty-selector label {
+  font-weight: bold;
+  color: #27ae60;
+}
+.difficulty-btn {
+  padding: 8px 20px;
+  border: 2px solid #27ae60;
+  background: white;
+  color: #27ae60;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s;
+}
+.difficulty-btn:hover:not(:disabled) {
+  background: #27ae60;
+  color: white;
+}
+.difficulty-btn.active {
+  background: #27ae60;
+  color: white;
+}
+.difficulty-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+@media (max-width: 768px) {
+  .game-container {
+    padding: 10px;
+  }
+  header {
+    margin-bottom: 15px;
+  }
+  h1 {
+    font-size: 2em;
+    padding-left: 50px;
+  }
+  main {
+    padding: 15px;
+    border-radius: 15px;
+  }
+  .game-info {
+    gap: 10px;
+    margin-bottom: 15px;
+  }
+  .score-box {
+    padding: 8px 15px;
+    min-width: 70px;
+  }
+  .score-value {
+    font-size: 1.4em;
+  }
+  .difficulty-selector {
+    width: 100%;
+    justify-content: center;
+  }
+  .difficulty-btn {
+    padding: 6px 12px;
+    font-size: 0.9em;
+  }
+  .controls {
+    gap: 10px;
+  }
+  .btn {
+    padding: 10px 20px;
+    font-size: 1em;
+  }
+  .game-controls,
+  .game-rules {
+    padding: 15px;
+    margin-top: 15px;
+  }
+}
+@media (max-width: 480px) {
+  h1 {
+    font-size: 1.6em;
+    padding-left: 40px;
+  }
+  .game-info {
+    flex-direction: column;
+  }
+  .difficulty-selector {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
 }
 .game-overlay {
   position: absolute;
@@ -429,5 +600,7 @@ footer {
 canvas {
   border-radius: 15px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  max-width: 100%;
+  height: auto;
 }
 </style>
