@@ -22,13 +22,18 @@
         </div>
         <div class="game-status" v-if="gameStatus">{{ gameStatus }}</div>
       </div>
+      
+      <div class="mobile-hint" v-if="isMobile && !gameOver">
+        💡 点击棋盘选择位置，再次点击确认落子
+      </div>
 
       <div class="board-container">
         <canvas 
           ref="canvasRef" 
-          width="600" 
-          height="600"
+          :width="canvasSize" 
+          :height="canvasSize"
           @click="handleCanvasClick"
+          @touchstart.prevent="handleCanvasTouch"
         ></canvas>
       </div>
 
@@ -42,7 +47,7 @@
         <ul>
           <li>黑棋先行，双方轮流落子</li>
           <li>先在横、竖或斜方向连成五子者获胜</li>
-          <li>点击棋盘即可落子</li>
+          <li>点击/触摸棋盘即可落子</li>
           <li>人机模式下，玩家执黑先行，电脑执白后手</li>
           <li>可以使用悔棋功能撤回上一步</li>
         </ul>
@@ -64,7 +69,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, onUnmounted } from 'vue'
 import GameResultDialog from '../components/GameResultDialog.vue'
 import BackButton from '../components/BackButton.vue'
 import PageFooter from '../components/PageFooter.vue'
@@ -72,6 +77,7 @@ import PageFooter from '../components/PageFooter.vue'
 const canvasRef = ref(null)
 const boardSize = 15
 const cellSize = ref(40)
+const canvasSize = ref(600)
 const board = ref([])
 const currentPlayer = ref(1) // 1: 黑棋(玩家), 2: 白棋(电脑/玩家2)
 const gameStatus = ref('')
@@ -79,6 +85,8 @@ const gameOver = ref(false)
 const moveHistory = ref([])
 const gameMode = ref('pve') // 'pve': 人机对战, 'pvp': 双人对战
 const isAIThinking = ref(false)
+const previewPosition = ref(null) // 预落子位置 {row, col}
+const isMobile = ref(false) // 是否为移动设备
 
 // 弹窗相关状态
 const showResultDialog = ref(false)
@@ -95,6 +103,29 @@ const initializeBoard = () => {
       board.value[i][j] = 0
     }
   }
+}
+
+// 检测是否为移动设备
+const checkIsMobile = () => {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+         window.innerWidth <= 768
+}
+
+// 绘制预落子标记
+const drawPreview = (ctx, row, col) => {
+  const x = cellSize.value * (col + 1)
+  const y = cellSize.value * (row + 1)
+  const radius = cellSize.value * 0.4
+  
+  ctx.strokeStyle = currentPlayer.value === 1 ? 'rgba(0, 0, 0, 0.5)' : 'rgba(200, 200, 200, 0.8)'
+  ctx.lineWidth = 3
+  ctx.setLineDash([5, 5])
+  
+  ctx.beginPath()
+  ctx.arc(x, y, radius, 0, Math.PI * 2)
+  ctx.stroke()
+  
+  ctx.setLineDash([])
 }
 
 // 绘制棋盘
@@ -144,6 +175,11 @@ const drawBoard = () => {
   
   // 绘制已下的棋子
   drawPieces(ctx)
+  
+  // 绘制预落子标记
+  if (previewPosition.value) {
+    drawPreview(ctx, previewPosition.value.row, previewPosition.value.col)
+  }
 }
 
 // 绘制棋子
@@ -210,17 +246,88 @@ const handleCanvasClick = (e) => {
   const col = Math.round(x / cellSize.value) - 1
   const row = Math.round(y / cellSize.value) - 1
   
-  if (isValidMove(row, col)) {
-    makeMove(row, col)
-    
-    // 人机模式下，触发AI下棋
-    if (gameMode.value === 'pve' && !gameOver.value && currentPlayer.value === 2) {
-      isAIThinking.value = true
-      setTimeout(() => {
-        aiMove()
-        isAIThinking.value = false
-      }, 500)
+  handlePositionSelect(row, col)
+}
+
+// 处理触摸事件
+const handleCanvasTouch = (e) => {
+  if (gameOver.value || isAIThinking.value) return
+  
+  const touch = e.touches[0]
+  const rect = canvasRef.value.getBoundingClientRect()
+  const x = touch.clientX - rect.left
+  const y = touch.clientY - rect.top
+  
+  const col = Math.round(x / cellSize.value) - 1
+  const row = Math.round(y / cellSize.value) - 1
+  
+  handlePositionSelect(row, col)
+}
+
+// 处理位置选择（包含预落子逻辑）
+const handlePositionSelect = (row, col) => {
+  if (!isValidMove(row, col)) {
+    previewPosition.value = null
+    drawBoard()
+    if (moveHistory.value.length > 0) {
+      const lastMove = moveHistory.value[moveHistory.value.length - 1]
+      redrawBoardWithHighlight(lastMove.row, lastMove.col)
     }
+    return
+  }
+  
+  // 移动端使用预落子确认机制
+  if (isMobile.value) {
+    // 如果已经有预落子位置，检查是否点击的是同一个位置
+    if (previewPosition.value && 
+        previewPosition.value.row === row && 
+        previewPosition.value.col === col) {
+      // 确认落子
+      confirmMove(row, col)
+    } else {
+      // 设置新的预落子位置
+      previewPosition.value = { row, col }
+      drawBoard()
+      if (moveHistory.value.length > 0) {
+        const lastMove = moveHistory.value[moveHistory.value.length - 1]
+        redrawBoardWithHighlight(lastMove.row, lastMove.col)
+      }
+    }
+  } else {
+    // 桌面端直接落子
+    confirmMove(row, col)
+  }
+}
+
+// 确认落子
+const confirmMove = (row, col) => {
+  previewPosition.value = null
+  makeMove(row, col)
+  
+  // 人机模式下，触发AI下棋
+  if (gameMode.value === 'pve' && !gameOver.value && currentPlayer.value === 2) {
+    isAIThinking.value = true
+    setTimeout(() => {
+      aiMove()
+      isAIThinking.value = false
+    }, 500)
+  }
+}
+
+// 计算合适的画布尺寸
+const calculateCanvasSize = () => {
+  const maxWidth = Math.min(window.innerWidth - 40, 600)
+  canvasSize.value = maxWidth
+  cellSize.value = canvasSize.value / (boardSize + 1)
+}
+
+// 处理窗口大小变化
+const handleResize = () => {
+  calculateCanvasSize()
+  drawBoard()
+  if (moveHistory.value.length > 0) {
+    const lastMove = moveHistory.value[moveHistory.value.length - 1]
+    redrawBoardWithHighlight(lastMove.row, lastMove.col)
   }
 }
 
@@ -235,6 +342,7 @@ const isValidMove = (row, col) => {
 const makeMove = (row, col) => {
   board.value[row][col] = currentPlayer.value
   moveHistory.value.push({row, col, player: currentPlayer.value})
+  previewPosition.value = null
   drawBoard()
   
   // 标记最后一步
@@ -461,6 +569,7 @@ const undo = () => {
   }
   
   // 重置棋盘
+  previewPosition.value = null
   initializeBoard()
   for (let move of moveHistory.value) {
     board.value[move.row][move.col] = move.player
@@ -485,6 +594,7 @@ const restart = () => {
   moveHistory.value = []
   gameStatus.value = ''
   isAIThinking.value = false
+  previewPosition.value = null
   initializeBoard()
   drawBoard()
 }
@@ -495,9 +605,15 @@ const canChangeMode = computed(() => {
 })
 
 onMounted(() => {
-  cellSize.value = canvasRef.value.width / (boardSize + 1)
+  isMobile.value = checkIsMobile()
+  calculateCanvasSize()
   initializeBoard()
   drawBoard()
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
 })
 </script>
 
@@ -543,6 +659,17 @@ main {
   border-radius: 10px;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.mobile-hint {
+  text-align: center;
+  padding: 10px;
+  background: #e3f2fd;
+  color: #1976d2;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  font-size: 0.95em;
+  font-weight: 500;
 }
 
 .mode-selector {
@@ -688,30 +815,95 @@ footer {
 }
 
 @media (max-width: 768px) {
+  .game-container {
+    padding: 10px;
+  }
+
   h1 {
     font-size: 1.8em;
   }
 
+  header {
+    margin-bottom: 15px;
+  }
+
+  main {
+    padding: 15px;
+  }
+
   .board-container {
     padding: 10px;
+    margin: 10px 0;
   }
 
   canvas {
     width: 100%;
     height: auto;
+    touch-action: none;
   }
 
   .game-info {
     flex-direction: column;
     gap: 10px;
+    padding: 10px;
+  }
+
+  .mode-selector {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .mode-selector select {
+    flex: 1;
+    max-width: 200px;
+  }
+
+  .current-player, .game-status {
+    font-size: 1em;
   }
 
   .controls {
     flex-direction: column;
+    gap: 10px;
   }
 
   .btn {
     width: 100%;
+    padding: 15px;
+    font-size: 1.1em;
+  }
+
+  .game-rules {
+    margin-top: 20px;
+    padding: 15px;
+  }
+
+  .game-rules h3 {
+    font-size: 1.1em;
+  }
+
+  .game-rules li {
+    font-size: 0.9em;
+    line-height: 1.5;
+  }
+}
+
+@media (max-width: 480px) {
+  h1 {
+    font-size: 1.5em;
+  }
+
+  main {
+    padding: 10px;
+  }
+
+  .mode-selector label {
+    font-size: 0.9em;
+  }
+
+  .mode-selector select {
+    padding: 6px 10px;
+    font-size: 0.9em;
   }
 }
 </style>
