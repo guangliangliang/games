@@ -33,7 +33,9 @@
           :width="canvasSize" 
           :height="canvasSize"
           @click="handleCanvasClick"
-          @touchstart.prevent="handleCanvasTouch"
+          @touchstart="handleCanvasTouchStart"
+          @touchend="handleCanvasTouchEnd"
+          @touchmove.prevent
         ></canvas>
       </div>
 
@@ -87,6 +89,8 @@ const gameMode = ref('pve') // 'pve': 人机对战, 'pvp': 双人对战
 const isAIThinking = ref(false)
 const previewPosition = ref(null) // 预落子位置 {row, col}
 const isMobile = ref(false) // 是否为移动设备
+const touchStartPos = ref(null) // 触摸开始位置
+const lastTouchTime = ref(0) // 上次触摸时间
 
 // 弹窗相关状态
 const showResultDialog = ref(false)
@@ -239,6 +243,12 @@ const drawPiece = (ctx, row, col, player, isLastMove = false) => {
 const handleCanvasClick = (e) => {
   if (gameOver.value || isAIThinking.value) return
   
+  const now = Date.now()
+  // 如果是触摸设备，并且距离上次触摸时间很近，忽略点击事件（防止双击）
+  if (isMobile.value && now - lastTouchTime.value < 300) {
+    return
+  }
+  
   const rect = canvasRef.value.getBoundingClientRect()
   const x = e.clientX - rect.left
   const y = e.clientY - rect.top
@@ -249,11 +259,8 @@ const handleCanvasClick = (e) => {
   handlePositionSelect(row, col)
 }
 
-// 处理触摸事件
-const handleCanvasTouch = (e) => {
-  if (gameOver.value || isAIThinking.value) return
-  
-  const touch = e.touches[0]
+// 获取触摸位置对应的棋盘坐标
+const getTouchPosition = (touch) => {
   const rect = canvasRef.value.getBoundingClientRect()
   const x = touch.clientX - rect.left
   const y = touch.clientY - rect.top
@@ -261,7 +268,37 @@ const handleCanvasTouch = (e) => {
   const col = Math.round(x / cellSize.value) - 1
   const row = Math.round(y / cellSize.value) - 1
   
-  handlePositionSelect(row, col)
+  return { row, col }
+}
+
+// 处理触摸开始事件
+const handleCanvasTouchStart = (e) => {
+  if (gameOver.value || isAIThinking.value) return
+  
+  const touch = e.touches[0]
+  touchStartPos.value = getTouchPosition(touch)
+}
+
+// 处理触摸结束事件
+const handleCanvasTouchEnd = (e) => {
+  if (gameOver.value || isAIThinking.value) return
+  
+  // 阻止默认行为，防止触发点击事件
+  e.preventDefault()
+  
+  lastTouchTime.value = Date.now()
+  
+  if (!touchStartPos.value) return
+  
+  const touch = e.changedTouches[0]
+  const endPos = getTouchPosition(touch)
+  
+  // 检查触摸位置是否与开始位置相同（避免滑动误触）
+  if (endPos.row === touchStartPos.value.row && endPos.col === touchStartPos.value.col) {
+    handlePositionSelect(endPos.row, endPos.col)
+  }
+  
+  touchStartPos.value = null
 }
 
 // 处理位置选择（包含预落子逻辑）
@@ -728,6 +765,9 @@ canvas {
   border-radius: 5px;
   cursor: pointer;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 .controls {
@@ -839,7 +879,10 @@ footer {
   canvas {
     width: 100%;
     height: auto;
-    touch-action: none;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
   }
 
   .game-info {
