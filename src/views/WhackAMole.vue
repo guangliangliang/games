@@ -362,7 +362,7 @@ main {
   width: 100%;
   height: 90px;
   overflow: hidden;
-  z-index: 2;
+  z-index: 3;
 }
 .dirt {
   position: absolute;
@@ -372,7 +372,7 @@ main {
   background: linear-gradient(to bottom, #8b4513, #654321);
   border-radius: 50%;
   box-shadow: inset 0 -10px 20px rgba(0, 0, 0, 0.3);
-  z-index: 3;
+  z-index: 2;
 }
 .mole {
   position: absolute;
@@ -384,14 +384,14 @@ main {
   user-select: none;
 }
 .mole.up {
-  transform: translateX(-50%) translateY(-30px);
+  transform: translateX(-50%) translateY(-10px);
 }
 .mole.hit {
   animation: whack 0.3s;
 }
 @keyframes whack {
-  0% { transform: translateX(-50%) translateY(-30px) scale(1); }
-  50% { transform: translateX(-50%) translateY(-40px) scale(1.2); }
+  0% { transform: translateX(-50%) translateY(-10px) scale(1); }
+  50% { transform: translateX(-50%) translateY(-20px) scale(1.2); }
   100% { transform: translateX(-50%) translateY(120%) scale(0.5); }
 }
 .controls {

@@ -71,7 +71,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, onUnmounted } from 'vue'
+import { ref, onMounted, computed, onUnmounted, nextTick, watch } from 'vue'
 import GameResultDialog from '../components/GameResultDialog.vue'
 import BackButton from '../components/BackButton.vue'
 import PageFooter from '../components/PageFooter.vue'
@@ -121,12 +121,42 @@ const drawPreview = (ctx, row, col) => {
   const y = cellSize.value * (row + 1)
   const radius = cellSize.value * 0.4
   
-  ctx.strokeStyle = currentPlayer.value === 1 ? 'rgba(0, 0, 0, 0.5)' : 'rgba(200, 200, 200, 0.8)'
-  ctx.lineWidth = 3
-  ctx.setLineDash([5, 5])
-  
+  // 绘制半透明棋子
+  ctx.globalAlpha = 0.5
   ctx.beginPath()
   ctx.arc(x, y, radius, 0, Math.PI * 2)
+  
+  const gradient = ctx.createRadialGradient(
+    x - radius/3, y - radius/3, radius/10,
+    x, y, radius
+  )
+  
+  if (currentPlayer.value === 1) {
+    gradient.addColorStop(0, '#666')
+    gradient.addColorStop(1, '#000')
+  } else {
+    gradient.addColorStop(0, '#fff')
+    gradient.addColorStop(1, '#ddd')
+  }
+  
+  ctx.fillStyle = gradient
+  ctx.fill()
+  
+  if (currentPlayer.value === 2) {
+    ctx.strokeStyle = '#999'
+    ctx.lineWidth = 1
+    ctx.stroke()
+  }
+  
+  ctx.globalAlpha = 1
+  
+  // 绘制外圈高亮
+  ctx.strokeStyle = currentPlayer.value === 1 ? '#ff6600' : '#0099ff'
+  ctx.lineWidth = 4
+  ctx.setLineDash([8, 4])
+  
+  ctx.beginPath()
+  ctx.arc(x, y, radius * 1.2, 0, Math.PI * 2)
   ctx.stroke()
   
   ctx.setLineDash([])
@@ -239,6 +269,27 @@ const drawPiece = (ctx, row, col, player, isLastMove = false) => {
   }
 }
 
+// 获取正确的棋盘坐标
+const getBoardPosition = (clientX, clientY) => {
+  const canvas = canvasRef.value
+  const rect = canvas.getBoundingClientRect()
+  
+  // 计算缩放比例：Canvas 内部尺寸与 CSS 显示尺寸的比例
+  const scaleX = canvas.width / rect.width
+  const scaleY = canvas.height / rect.height
+  
+  // 将触摸/点击坐标转换为 Canvas 内部坐标
+  const canvasX = (clientX - rect.left) * scaleX
+  const canvasY = (clientY - rect.top) * scaleY
+  
+  // 计算网格位置 - 使用更精确的方法
+  // 找到最近的交叉点
+  const col = Math.floor((canvasX + cellSize.value / 2) / cellSize.value) - 1
+  const row = Math.floor((canvasY + cellSize.value / 2) / cellSize.value) - 1
+  
+  return { row, col }
+}
+
 // 处理点击事件
 const handleCanvasClick = (e) => {
   if (gameOver.value || isAIThinking.value) return
@@ -249,26 +300,13 @@ const handleCanvasClick = (e) => {
     return
   }
   
-  const rect = canvasRef.value.getBoundingClientRect()
-  const x = e.clientX - rect.left
-  const y = e.clientY - rect.top
-  
-  const col = Math.round(x / cellSize.value) - 1
-  const row = Math.round(y / cellSize.value) - 1
-  
-  handlePositionSelect(row, col)
+  const pos = getBoardPosition(e.clientX, e.clientY)
+  handlePositionSelect(pos.row, pos.col)
 }
 
 // 获取触摸位置对应的棋盘坐标
 const getTouchPosition = (touch) => {
-  const rect = canvasRef.value.getBoundingClientRect()
-  const x = touch.clientX - rect.left
-  const y = touch.clientY - rect.top
-  
-  const col = Math.round(x / cellSize.value) - 1
-  const row = Math.round(y / cellSize.value) - 1
-  
-  return { row, col }
+  return getBoardPosition(touch.clientX, touch.clientY)
 }
 
 // 处理触摸开始事件
@@ -354,12 +392,24 @@ const confirmMove = (row, col) => {
 // 计算合适的画布尺寸
 const calculateCanvasSize = () => {
   const maxWidth = Math.min(window.innerWidth - 40, 600)
+  
+  // 设置 Canvas 内部绘图尺寸和 CSS 显示尺寸一致
+  // 简化处理，避免复杂的 DPR 问题
   canvasSize.value = maxWidth
   cellSize.value = canvasSize.value / (boardSize + 1)
+  
+  // 更新 Canvas 元素尺寸
+  if (canvasRef.value) {
+    canvasRef.value.width = canvasSize.value
+    canvasRef.value.height = canvasSize.value
+    canvasRef.value.style.width = canvasSize.value + 'px'
+    canvasRef.value.style.height = canvasSize.value + 'px'
+  }
 }
 
 // 处理窗口大小变化
 const handleResize = () => {
+  isMobile.value = checkIsMobile()
   calculateCanvasSize()
   drawBoard()
   if (moveHistory.value.length > 0) {
@@ -641,11 +691,35 @@ const canChangeMode = computed(() => {
   return moveHistory.value.length === 0 || gameOver.value
 })
 
-onMounted(() => {
+watch(canvasSize, () => {
+  if (canvasRef.value) {
+    drawBoard()
+  }
+})
+
+onMounted(async () => {
   isMobile.value = checkIsMobile()
   calculateCanvasSize()
   initializeBoard()
+  
+  // 等待下一个 DOM 更新周期
+  await nextTick()
+  
+  // 立即尝试绘制
   drawBoard()
+  
+  // 延迟再次绘制，解决微信环境的时序问题
+  setTimeout(() => {
+    calculateCanvasSize()
+    drawBoard()
+  }, 100)
+  
+  // 再次延迟确保
+  setTimeout(() => {
+    calculateCanvasSize()
+    drawBoard()
+  }, 300)
+  
   window.addEventListener('resize', handleResize)
 })
 
